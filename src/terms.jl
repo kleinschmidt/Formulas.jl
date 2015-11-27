@@ -66,3 +66,9 @@ push!(t::Term, new_child::Term{:*}, others...) =
     push!(t, Term{:+}(new_child), others...)
 
 
+order(t::Term) = length(t.children)
+
+function Base.sort!(t::Term)
+    sort!(t.children, by=order)
+    return t
+end
