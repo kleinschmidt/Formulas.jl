@@ -71,9 +71,70 @@ push!(t::Term, new_child::Term{:*}, others...) =
     push!(t, Term{:+}(new_child), others...)
 
 
-order(t::Term) = length(t.children)
+## sorting term by the degree of its children: order is 1 for everything except
+## interaction Term{:&} where order is number of children
+degree(t::Term{:&}) = length(t.children)
+degree(::Term) = 1
+degree(::InterceptTerm) = 0
 
 function Base.sort!(t::Term)
-    sort!(t.children, by=order)
+    sort!(t.children, by=degree)
     return t
+end
+
+## extract evaluation terms: children of Term{:+} and Term{:&}, nothing for
+## ranef Term{:|} and intercept terms, and Term itself for everything else.
+evt(t::Term) = Term[t]
+evt(t::Term{:&}) = mapreduce(evt, vcat, t.children)
+evt(t::Term{:+}) = mapreduce(evt, vcat, t.children)
+evt(t::Term{:|}) = Term[]
+evt(t::InterceptTerm) = Term[]
+
+## whether a Term is for fixed effects or not
+isfe(t::Term{:|}) = false
+isfe(t::Term) = true
+
+
+################################################################################
+## Constructing a DataFrames.Terms object
+
+type Terms
+    terms::Vector
+    eterms::Vector        # evaluation terms
+    factors::Matrix{Int8} # maps terms to evaluation terms
+    order::Vector{Int}    # orders of rhs terms
+    response::Bool        # indicator of a response, which is eterms[1] if present
+    intercept::Bool       # is there an intercept column in the model matrix?
+end
+
+function Terms(f::Formula)
+    ## start by raising everything on the right-hand side by converting
+    rhs = sort!(Term{:+}(Term(f.rhs)))
+    terms = rhs.children
+
+    ## detect intercept
+    is_intercept = [isa(t, InterceptTerm) for t in terms]
+    hasintercept = mapreduce(t -> isa(t, Term{1}),
+                             &,
+                             true, # default is to have intercept
+                             terms[is_intercept])
+
+    terms = terms[!is_intercept]
+    degrees = map(degree, terms)
+    
+    evalterms = map(evt, terms)
+
+    haslhs = f.lhs != nothing
+    if haslhs
+        unshift!(evalterms, Term[Term(f.lhs)])
+        unshift!(degrees, 1)
+    end
+
+    evalterm_sets = [Set(x) for x in evalterms]
+    evalterms = unique(vcat(evalterms...))
+    
+    factors = Int8[t in s for t in evalterms, s in evalterm_sets]
+
+    Terms(terms, evalterms, factors, degrees, haslhs, hasintercept)
+
 end
