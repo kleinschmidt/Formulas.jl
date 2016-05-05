@@ -9,11 +9,12 @@ type Term{H} <: AbstractTerm
     Term(children::Vector{Term}) = push!(new(Term[]), children...)
 end
 
+typealias InterceptTerm Union{Term{0}, Term{-1}, Term{1}}
+
 ## equality of Terms
 import Base.==
 =={G,H}(::Term{G}, ::Term{H}) = false
 =={H}(a::Term{H}, b::Term{H}) = a.children == b.children
-
 
 function Base.show{H}(io::IO, t::Term{H})
     print(io, string(H))
@@ -23,6 +24,8 @@ function Base.show{H}(io::IO, t::Term{H})
         print(io, ")")
     end
 end
+## show ranef term:
+Base.show(io::IO, t::Term{:|}) = print(io, "(", t.children[1], " | ", t.children[2], ")")
 
 ## Constructor from expression
 import Base.convert
@@ -47,10 +50,12 @@ push!(t::Term) = t
 
 
 ## associative rule: pushing a &() onto another &(), or +() into +()
-push!(t::Term{:&}, new_child::Term{:&}, others...) = push!(t, new_child.children..., others...)
-push!(t::Term{:+}, new_child::Term{:+}, others...) = push!(t, new_child.children..., others...)
+push!(t::Term{:&}, new_child::Term{:&}, others...) =
+    push!(t, new_child.children..., others...)
+push!(t::Term{:+}, new_child::Term{:+}, others...) =
+    push!(t, new_child.children..., others...)
 
-## distributive property: &(a..., +(b...), c...) -> +(&(a..., b_i, c...)_i)
+## distributive property: &(a..., +(b...), c...) -> +(&(a..., b_i, c...)_i...)
 push!(t::Term{:&}, new_child::Term{:+}, others...) =
     push!(Term{:+}(),
           map(c -> push!(deepcopy(t), c, others...),
