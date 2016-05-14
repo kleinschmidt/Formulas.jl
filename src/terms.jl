@@ -30,7 +30,7 @@ Base.show(io::IO, t::Term{:|}) = print(io, "(", t.children[1], " | ", t.children
 ## Constructor from expression
 import Base.convert
 function convert(::Type{Term}, ex::Expr)
-    ex.head == :call || error("non-call expression detected")
+    ex.head == :call || error("non-call expression detected: '$(ex.head)'")
     return push!(Term{ex.args[1]}(),
                  map(child -> convert(Term, child), ex.args[2:end])...)
 end
