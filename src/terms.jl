@@ -3,10 +3,11 @@
 abstract AbstractTerm
 
 type Term{H} <: AbstractTerm
-    children::Vector{Term}
+    children::Vector{Union{Term,Symbol}}
 
     Term() = new(Term[])
-    Term(children::Vector{Term}) = push!(new(Term[]), children...)
+    Term(children::Vector) = push!(new(Term[]), children...)
+    Term(child::Symbol) = new(Symbol[child])
 end
 
 typealias InterceptTerm Union{Term{0}, Term{-1}, Term{1}}
@@ -24,20 +25,25 @@ function Base.show{H}(io::IO, t::Term{H})
         print(io, ")")
     end
 end
+Base.show(io::IO, t::Term{:eval}) = print(io, string(t.children[1]))
 ## show ranef term:
 Base.show(io::IO, t::Term{:|}) = print(io, "(", t.children[1], " | ", t.children[2], ")")
 
 ## Constructor from expression
-import Base.convert
-function convert(::Type{Term}, ex::Expr)
+function Term(ex::Expr)
     ex.head == :call || error("non-call expression detected: '$(ex.head)'")
     return push!(Term{ex.args[1]}(),
-                 map(child -> convert(Term, child), ex.args[2:end])...)
+                 map(Term, ex.args[2:end])...)
 end
-## Constructor from symbol (leaves)
-convert(::Type{Term}, s::Symbol) = Term{s}()
 
+Term(s::Symbol) = Term{:eval}(s)
+function Term(i::Integer)
+    i == 0 || i == -1 || i == 1 || error("Can't construct term from Integer $i")
+    Term{i}()
+end
 
+## no-op constructor
+Term(t::Term) = t
 
 ## Adding children to a Term with push:
 ## Default: push onto children vector.
@@ -62,7 +68,7 @@ push!(t::Term{:&}, new_child::Term{:+}, others...) =
               new_child.children)...)
 
 ## expand * -> main effects + interactions
-convert(::Type{Term{:+}}, t::Term{:*}) =
+Base.convert(::Type{Term{:+}}, t::Term{:*}) =
     push!(Term{:+}(),
           reduce((a,b) -> Term{:+}([a, b, Term{:&}([a, b])]),
                  t.children))
@@ -85,6 +91,7 @@ end
 ## extract evaluation terms: children of Term{:+} and Term{:&}, nothing for
 ## ranef Term{:|} and intercept terms, and Term itself for everything else.
 evt(t::Term) = Term[t]
+evt(t::Term{:eval}) = t.children
 evt(t::Term{:&}) = mapreduce(evt, vcat, t.children)
 evt(t::Term{:+}) = mapreduce(evt, vcat, t.children)
 evt(t::Term{:|}) = Term[]

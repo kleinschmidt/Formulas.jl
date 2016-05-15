@@ -2,7 +2,6 @@ using Formulas
 using Base.Test
 
 ## Associative property
-@test Term(:(a+b)) == Term{:+}([Term{:a}(), Term{:b}()])
 @test Term(:(a+(b+c))) == Term(:(a+b+c))
 @test Term(:((a+b)+c)) == Term(:(a+b+c))
 @test Term(:(a&(b&c))) == Term(:(a&b&c))
