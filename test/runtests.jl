@@ -1,19 +1,33 @@
-using Formulas
+
+fatalerrors = length(ARGS) > 0 && ARGS[1] == "-f"
+quiet = length(ARGS) > 0 && ARGS[1] == "-q"
+anyerrors = false
+
 using Base.Test
+using Formulas
 
-## Associative property
-@test Term(:(a+(b+c))) == Term(:(a+b+c))
-@test Term(:((a+b)+c)) == Term(:(a+b+c))
-@test Term(:(a&(b&c))) == Term(:(a&b&c))
-@test Term(:((a&b)&c)) == Term(:(a&b&c))
+my_tests = ["term.jl",
+            "df_formula.jl"]
+# my_tests = ["term.jl"]
 
-## Distributive property
-@test Term(:(a & (b+c))) == Term(:(a&b + a&c))
-@test Term(:((a+b) & c)) == Term(:(a&c + b&c))
-@test Term(:((a+b) & (c+d))) == Term(:(a&c + a&d + b&c + b&d))
-@test Term(:(a & (b+c) & d)) == Term(:(a&b&d + a&c&d))
+println("Running tests:")
 
-## Expand * to main effects + interactions
-@test Term{:+}(Term(:(a*b))) == Term(:(a+b+a&b))
-@test sort!(Term{:+}(Term(:(a*b*c)))) == Term(:(a+b+c+a&b+a&c+b&c+a&b&c))
+for my_test in my_tests
+    try
+        include(my_test)
+        println("\t\033[1m\033[32mPASSED\033[0m: $(my_test)")
+    catch e
+        anyerrors = true
+        println("\t\033[1m\033[31mFAILED\033[0m: $(my_test)")
+        if fatalerrors
+            rethrow(e)
+        elseif !quiet
+            showerror(STDOUT, e, backtrace())
+            println()
+        end
+    end
+end
 
+if anyerrors
+    throw("Tests failed")
+end
