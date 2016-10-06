@@ -7,7 +7,7 @@ type Term{H} <: AbstractTerm
 
     Term() = new(Term[])
     Term(children::Vector) = push!(new(Term[]), children...)
-    Term(child::Symbol) = new(Symbol[child])
+    Term(child::Symbol) = new([child])
 end
 
 typealias InterceptTerm Union{Term{0}, Term{-1}, Term{1}}
@@ -76,6 +76,7 @@ Base.convert(::Type{Term{:+}}, t::Term{:*}) =
 push!(t::Term, new_child::Term{:*}, others...) =
     push!(t, Term{:+}(new_child), others...)
 
+Base.convert(::Type{Term{:+}}, t::Term) = push!(Term{:+}(), t)
 
 ## sorting term by the degree of its children: order is 1 for everything except
 ## interaction Term{:&} where order is number of children
@@ -133,8 +134,9 @@ function Terms(f::Formula)
 
     haslhs = f.lhs != nothing
     if haslhs
-        unshift!(evalterms, Term[Term(f.lhs)])
-        unshift!(degrees, 1)
+        lhs = Term(f.lhs)
+        unshift!(evalterms, evt(lhs))
+        unshift!(degrees, degree(lhs))
     end
 
     evalterm_sets = [Set(x) for x in evalterms]
