@@ -35,8 +35,10 @@ function Term(ex::Expr)
     return push!(Term{ex.args[1]}(),
                  map(Term, ex.args[2:end])...)
 end
+Base.convert(::Type{Term}, e::Expr) = Term(e)
 
 Term(s::Symbol) = Term{:eval}(s)
+Base.convert(::Type{Term}, s::Symbol) = Term(s)
 function Term(i::Integer)
     i == 0 || i == -1 || i == 1 || error("Can't construct term from Integer $i")
     Term{i}()
