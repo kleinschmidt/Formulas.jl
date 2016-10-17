@@ -125,7 +125,11 @@ isfe(t::Term) = true
 type Terms
     terms::Vector
     eterms::Vector        # evaluation terms
-    factors::Matrix{Int8} # maps terms to evaluation terms
+    factors::Matrix{Bool} # maps terms to evaluation terms
+    ## An eterms x terms matrix which is true for terms that need to be "promoted"
+    ## to full rank in constructing a model matrx
+    is_non_redundant::Matrix{Bool}
+# order can probably be dropped.  It is vec(sum(factors, 1))
     order::Vector{Int}    # orders of rhs terms
     response::Bool        # indicator of a response, which is eterms[1] if present
     intercept::Bool       # is there an intercept column in the model matrix?
@@ -161,7 +165,8 @@ function Terms(f::Formula)
     evalterms = unique(vcat(evalterms...))
     
     factors = Int8[t in s for t in evalterms, s in evalterm_sets]
+    non_redundants = fill(false, size(factors)) # initialize to false
 
-    Terms(terms, evalterms, factors, degrees, haslhs, hasintercept)
+    Terms(terms, evalterms, factors, non_redundants, degrees, haslhs, hasintercept)
 
 end
