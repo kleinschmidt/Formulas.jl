@@ -94,6 +94,12 @@ t = Terms(y ~ x1 & x2 & x3)
 t = Terms(y ~ x1 & (x2 + x3))
 @test t.terms == Term[:(x1&x2), :(x1&x3)]
 
+t = Terms(y ~ (x1 + x2) & x3)
+@test t.terms == Term[:(x1&x3), :(x2&x3)]
+
+t = Terms(y ~ (x1 + x2) & (x3 + x4))
+@test t.terms == Term[:(x1&x3), :(x1&x4), :(x2&x3), :(x2&x4)]
+
 ## three-way *
 t = Terms(y ~ x1 * x2 * x3)
 @test t.terms == Term[:x1, :x2, :x3,
