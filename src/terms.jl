@@ -6,7 +6,7 @@ type Term{H} <: AbstractTerm
     children::Vector{Union{Term,Symbol}}
 
     Term() = new(Term[])
-    Term(children::Vector) = push!(new(Term[]), children...)
+    Term(children::Vector) = add_children!(new(Term[]), children)
     Term(child::Symbol) = new([child])
 end
 
@@ -17,6 +17,7 @@ import Base.==
 =={G,H}(::Term{G}, ::Term{H}) = false
 =={H}(a::Term{H}, b::Term{H}) = a.children == b.children
 
+## display of terms
 function Base.show{H}(io::IO, t::Term{H})
     print(io, string(H))
     if length(t.children) > 0
@@ -29,56 +30,66 @@ Base.show(io::IO, t::Term{:eval}) = print(io, string(t.children[1]))
 ## show ranef term:
 Base.show(io::IO, t::Term{:|}) = print(io, "(", t.children[1], " | ", t.children[2], ")")
 
-## Constructor from expression
-function Term(ex::Expr)
-    ex.head == :call || error("non-call expression detected: '$(ex.head)'")
-    return push!(Term{ex.args[1]}(),
-                 map(Term, ex.args[2:end])...)
-end
-Base.convert(::Type{Term}, e::Expr) = Term(e)
+## Converting to Term:
 
-Term(s::Symbol) = Term{:eval}(s)
-Base.convert(::Type{Term}, s::Symbol) = Term(s)
+## Symbols are converted to :eval terms (leaf nodes)
+Base.convert(::Type{Term}, s::Symbol) = Term{:eval}(s)
+
+## Integers to intercept terms
 function Term(i::Integer)
     i == 0 || i == -1 || i == 1 || error("Can't construct term from Integer $i")
     Term{i}()
 end
 
 ## no-op constructor
-Term(t::Term) = t
+Term{H}(t::Term{H}) = t
 
-## Adding children to a Term with push:
-## Default: push onto children vector.
-import Base.push!
-function push!(t::Term, c::Term, others...)
-    push!(t.children, c)
-    return push!(t, others...)
+## convert from one head type to another
+Base.call{H,J}(::Type{Term{H}}, t::Term{J}) = add_children!(Term{H}(), t, [])
+
+## Expressions are recursively converted to Terms, depth-first, and then added
+## as children.  Specific `add_children!` methods handle special cases like
+## associative and distributive operators.
+function Base.convert(::Type{Term}, ex::Expr)
+    ex.head == :call || error("non-call expression detected: '$(ex.head)'")
+    add_children!(Term{ex.args[1]}(), [Term(a) for a in ex.args[2:end]])
 end
-push!(t::Term) = t
 
 
-## associative rule: pushing a &() onto another &(), or +() into +()
-push!(t::Term{:&}, new_child::Term{:&}, others...) =
-    push!(t, new_child.children..., others...)
-push!(t::Term{:+}, new_child::Term{:+}, others...) =
-    push!(t, new_child.children..., others...)
+## Adding children to a Term
 
-## distributive property: &(a..., +(b...), c...) -> +(&(a..., b_i, c...)_i...)
-push!(t::Term{:&}, new_child::Term{:+}, others...) =
-    push!(Term{:+}(),
-          map(c -> push!(deepcopy(t), c, others...),
-              new_child.children)...)
+## General strategy: add one at a time to allow for dispatching on special
+## cases, but also keep track of the rest of the children being added because at
+## least the distributive rule requires that context.
+add_children!(t::Term, new_children::Vector) =
+    isempty(new_children) ?
+    t :
+    add_children!(t::Term, new_children[1], new_children[2:end])
 
-## expand * -> main effects + interactions
-Base.convert(::Type{Term{:+}}, t::Term{:*}) =
-    push!(Term{:+}(),
-          reduce((a,b) -> Term{:+}([a, b, Term{:&}([a, b])]),
-                 t.children))
+function add_children!(t::Term, c::Term, others::Vector)
+    push!(t.children, c)
+    add_children!(t, others)
+end
 
-push!(t::Term, new_child::Term{:*}, others...) =
-    push!(t, Term{:+}(new_child), others...)
+## special cases:
+## Associative rule
+add_children!(t::Term{:+}, new_child::Term{:+}, others::Vector) =
+    add_children!(t, cat(1, new_child.children, others))
+add_children!(t::Term{:&}, new_child::Term{:&}, others::Vector) =
+    add_children!(t, cat(1, new_child.children, others))
 
-Base.convert(::Type{Term{:+}}, t::Term) = push!(Term{:+}(), t)
+## Distributive property
+## &(a..., +(b...), c...) -> +(&(a..., b_i, c...)_i...)
+add_children!(t::Term{:&}, new_child::Term{:+}, others::Vector) =
+    Term{:+}([add_children!(deepcopy(t), c, others) for c in new_child.children])
+
+## Expansion of a*b -> a + b + a&b
+function add_children!(t::Term, new_child::Term{:*}, others::Vector)
+    add_children!(Term{:+}(reduce((a,b) -> Term{:+}([a, b, Term{:&}([a,b])]),
+                                  new_child.children)),
+                  others)
+end
+
 
 ## sorting term by the degree of its children: order is 1 for everything except
 ## interaction Term{:&} where order is number of children
