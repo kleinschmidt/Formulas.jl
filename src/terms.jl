@@ -88,6 +88,11 @@ expand_star(a::Term,b::Term) = Term{:+}([a, b, Term{:&}([a,b])])
 add_children!(t::Term, new_child::Term{:*}, others::Vector) =
     add_children!(Term{:+}(reduce(expand_star, new_child.children)), others)
 
+## Handle - for intercept term -1, and throw error otherwise
+add_children!(t::Term{:-}, children::Vector) =
+    isa(children[2], Term{1}) ?
+    Term{:+}([children[1], Term{-1}()]) :
+    error("invalid subtraction of $(children[2]); subtraction only supported for -1")
 
 ## sorting term by the degree of its children: order is 1 for everything except
 ## interaction Term{:&} where order is number of children
@@ -125,6 +130,8 @@ type Terms
     response::Bool        # indicator of a response, which is eterms[1] if present
     intercept::Bool       # is there an intercept column in the model matrix?
 end
+
+Base.:(==)(t1::Terms, t2::Terms) = all(getfield(t1, f)==getfield(t2, f) for f in fieldnames(t1))
 
 function Terms(f::Formula)
     ## start by raising everything on the right-hand side by converting
