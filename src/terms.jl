@@ -84,11 +84,9 @@ add_children!(t::Term{:&}, new_child::Term{:+}, others::Vector) =
     Term{:+}([add_children!(deepcopy(t), c, others) for c in new_child.children])
 
 ## Expansion of a*b -> a + b + a&b
-function add_children!(t::Term, new_child::Term{:*}, others::Vector)
-    add_children!(Term{:+}(reduce((a,b) -> Term{:+}([a, b, Term{:&}([a,b])]),
-                                  new_child.children)),
-                  others)
-end
+expand_star(a::Term,b::Term) = Term{:+}([a, b, Term{:&}([a,b])])
+add_children!(t::Term, new_child::Term{:*}, others::Vector) =
+    add_children!(Term{:+}(reduce(expand_star, new_child.children)), others)
 
 
 ## sorting term by the degree of its children: order is 1 for everything except
