@@ -45,7 +45,7 @@ end
 Term{H}(t::Term{H}) = t
 
 ## convert from one head type to another
-Base.call{H,J}(::Type{Term{H}}, t::Term{J}) = add_children!(Term{H}(), t, [])
+(::Type{Term{H}}){H,J}(t::Term{J}) = add_children!(Term{H}(), t, [])
 
 ## Expressions are recursively converted to Terms, depth-first, and then added
 ## as children.  Specific `add_children!` methods handle special cases like
